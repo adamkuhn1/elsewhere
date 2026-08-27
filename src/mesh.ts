@@ -26,8 +26,8 @@ export interface MeshOptions {
    * per-pixel, but a per-pixel mesh is both unnecessary (depth from a
    * single monocular estimate has nowhere near pixel-level precision) and
    * slow -- this caps triangle count while still tracking the depth map's
-   * actual resolution up to the cap, per Phase 6's "mesh density reflects
-   * actual depth resolution" requirement.
+   * actual resolution up to the cap, so mesh density reflects real depth
+   * resolution rather than an arbitrary fixed grid.
    */
   maxGridResolution?: number;
   /**

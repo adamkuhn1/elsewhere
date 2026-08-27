@@ -1,10 +1,9 @@
 // ---------------------------------------------------------------------------
 // Head tracking: deferred, not faked.
 //
-// Phase 7 of this project's build brief allows deferring head tracking to a
-// later milestone if implementing it would exceed the current budget --
-// explicitly on the condition that the interface point is real and tested,
-// not that tracking data is faked in the meantime. Pointer parallax
+// Head tracking is deferred to a later version -- on the condition that the
+// interface point is real and tested, not that tracking data is faked in
+// the meantime. Pointer parallax
 // (renderer.ts's setPointer) is the actual, working, always-on control;
 // this module exists so App.tsx has one honest place to ask "is head
 // tracking available" and get a real answer, and so a later milestone can

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { UnimplementedHeadTracker, isHeadTrackingAvailable } from "./tracking";
 
-describe("head tracking (deferred, per Phase 7)", () => {
+describe("head tracking (deferred to a later version)", () => {
   it("reports unavailable rather than pretending to support it", () => {
     expect(isHeadTrackingAvailable()).toBe(false);
   });

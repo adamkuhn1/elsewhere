@@ -1,8 +1,8 @@
 import type { Keyframe } from "./types";
 
 // ---------------------------------------------------------------------------
-// Closes Phase 8 without this build ever touching a real camera itself: an
-// automated build process has no business photographing anyone's room, so
+// This build never touches a real camera itself: an automated build
+// process has no business photographing anyone's room, so
 // the one real recorded example has to come from Adam actually using the
 // live pipeline above, once, on his own machine. This turns whatever he
 // just captured into the exact three files `recordedExample.ts` expects
