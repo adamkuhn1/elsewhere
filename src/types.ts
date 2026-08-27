@@ -50,7 +50,8 @@ export type FailureReason =
   | "model-load-failed"
   | "inference-failed"
   | "webgl-unsupported"
-  | "recorded-example-load-failed";
+  | "recorded-example-load-failed"
+  | "render-failed";
 
 export interface CaptureFailure {
   reason: FailureReason;

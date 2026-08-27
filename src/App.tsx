@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Camera, CameraError } from "./camera";
 import { DepthEstimator, DepthEstimationError, checkLiveDepthSupport, normalizeDepth } from "./depth";
 import { buildMesh } from "./mesh";
 import { Renderer } from "./renderer";
-import { loadRecordedExample, RecordedExampleError } from "./recordedExample";
+import { hasRecordedExample, loadRecordedExample, RecordedExampleError } from "./recordedExample";
 import { downloadAsRecordedExample, isExportDebugEnabled } from "./exportCapture";
 import { identityPose, releaseKeyframeImage, type Keyframe, type CaptureFailure } from "./types";
 
@@ -24,13 +24,42 @@ const FAILURE_COPY: Record<CaptureFailure["reason"], string> = {
   "inference-failed": "Depth estimation failed on that frame. Try again.",
   "webgl-unsupported": "This browser doesn't support WebGL2, which the viewer needs.",
   "recorded-example-load-failed": "The recorded example hasn't been captured yet.",
+  "render-failed": "Building the 3D view from that frame failed.",
 };
+
+/**
+ * MeshView builds a WebGL mesh and uploads a texture inside a mount effect --
+ * outside the try/catch in capture() above, since it runs in a different
+ * component after the keyframe is already accepted. Without this boundary, a
+ * synchronous throw there (bad depth data, a WebGL context that failed to
+ * init, a shader compile error) is an uncaught render error: React unmounts
+ * the tree and the app goes blank, which looks like it "mysteriously reset"
+ * rather than like an honest failure state. This catches that and reuses the
+ * same failure panel every other error path already shows.
+ */
+class MeshErrorBoundary extends Component<
+  { onFailed: (message: string) => void; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown) {
+    this.props.onFailed(error instanceof Error ? error.message : String(error));
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
 
 export default function App() {
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [compare, setCompare] = useState(false);
   // null = still checking, on mount, before ever rendering "Try live capture".
   const [liveSupported, setLiveSupported] = useState<boolean | null>(null);
+  // null = still checking, before ever rendering "Open recorded example".
+  const [exampleAvailable, setExampleAvailable] = useState<boolean | null>(null);
   const cameraRef = useRef<Camera>();
   const estimatorRef = useRef<DepthEstimator>();
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
@@ -51,6 +80,18 @@ export default function App() {
     let cancelled = false;
     checkLiveDepthSupport().then((supported) => {
       if (!cancelled) setLiveSupported(supported);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Same idea, for the recorded example: don't offer a button that always
+  // ends in "hasn't been captured yet" when this build doesn't bundle one.
+  useEffect(() => {
+    let cancelled = false;
+    hasRecordedExample().then((available) => {
+      if (!cancelled) setExampleAvailable(available);
     });
     return () => {
       cancelled = true;
@@ -196,14 +237,24 @@ export default function App() {
 
       {stage.kind === "idle" && (
         <div className="panel">
-          {/* The reliable default: works everywhere, immediately, with no
-              permission prompt. Listed and styled first for that reason --
-              live capture is the deliberate secondary action below it, not
-              the other way around. */}
-          <button onClick={openRecordedExample}>Open recorded example</button>
+          {/* The reliable default when one exists: works everywhere,
+              immediately, with no permission prompt. Listed and styled
+              first for that reason -- live capture is the deliberate
+              secondary action below it, not the other way around. Disabled
+              rather than hidden when no example is bundled, so a visitor
+              can see the option exists without hitting a button that only
+              ever fails. */}
+          {exampleAvailable ? (
+            <button onClick={openRecordedExample}>Open recorded example</button>
+          ) : (
+            <button disabled title="No recorded example is bundled yet.">
+              Recorded example coming later
+            </button>
+          )}
           {liveSupported === false && (
             <p className="panel-note">
-              This browser doesn't support live depth capture (WebGPU is required). The recorded example above works everywhere.
+              This browser doesn't support live depth capture (WebGPU is required).
+              {exampleAvailable ? " The recorded example above works everywhere." : ""}
             </p>
           )}
           {liveSupported !== false && (
@@ -228,7 +279,13 @@ export default function App() {
 
       {stage.kind === "viewing" && (
         <div className="panel">
-          <MeshView keyframe={stage.keyframe} compare={compare} />
+          <MeshErrorBoundary
+            onFailed={(message) =>
+              setStage({ kind: "failed", failure: { reason: "render-failed", message } })
+            }
+          >
+            <MeshView keyframe={stage.keyframe} compare={compare} />
+          </MeshErrorBoundary>
           <div className="controls">
             <button onClick={() => setCompare((c) => !c)}>{compare ? "Show mesh" : "Compare to original"}</button>
             <button onClick={recapture}>{stage.source === "captured" ? "Recapture" : "Try live capture"}</button>
@@ -248,6 +305,9 @@ export default function App() {
       {stage.kind === "failed" && (
         <div className="panel">
           <p className="panel-error">{FAILURE_COPY[stage.failure.reason]}</p>
+          {import.meta.env.DEV && (
+            <p className="panel-note">{stage.failure.reason}: {stage.failure.message}</p>
+          )}
           <button onClick={backFromFailure}>Back</button>
         </div>
       )}
