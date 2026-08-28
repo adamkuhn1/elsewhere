@@ -40,7 +40,10 @@ unusable experience, not a slower version of this one.
    estimated depth, discontinuous regions (depth cliffs) left as gaps rather
    than stretched into a smear.
 5. Moving the pointer orbits a small, bounded virtual camera around that
-   mesh — real parallax, not a fake 3D-looking pan.
+   mesh — real parallax, not a fake 3D-looking pan. An optional **Use head
+   tracking** button offers the same control driven by head movement instead
+   (see below); it's off unless you explicitly turn it on, and pointer
+   parallax works exactly as before if you never touch it.
 6. **Nothing captured is ever sent anywhere.** The only network requests the
    live pipeline makes are one-time fetches of the model weights (from
    Hugging Face) and the ONNX runtime (self-hosted, same-origin — see
@@ -78,11 +81,26 @@ otherwise bundle from the library's own internal `new URL(...)` reference.
   the `Keyframe`/`CameraPose` contract in `src/types.ts` already carries for
   a future version — see that file for exactly what's meant to grow here
   without a rewrite.
-- No head tracking. `src/tracking.ts` is a real, tested interface point
-  (`UnimplementedHeadTracker`) rather than a fake one — pointer parallax is
-  the actual, working control in this version.
 - No generated or synthetic depth data anywhere, including the recorded
   example.
+
+## Optional head tracking
+
+`src/tracking.ts` adds one alternative input into the same `setPointer` call
+pointer-drag already drives: a face-landmark tracker (MediaPipe's
+`FaceLandmarker`, one face, translation only — no rotation, no expression, no
+identity, nothing stored or recorded) that turns head movement into the same
+normalized offset a pointer drag would. It's entirely optional and off by
+default. Clicking **Use head tracking** requests camera access, calibrates
+your first head position as center, and smooths subsequent readings with an
+exponential moving average before feeding them into the exact same clamp
+pointer parallax already uses. Clicking it again (or hitting Recapture, or
+navigating away) stops the camera immediately and hands control back to the
+pointer. The MediaPipe library and its model are only fetched the moment you
+click the button — never on page load — and are the one deliberate exception
+to "self-hosted": they're loaded from Google's own CDN, a one-time asset
+fetch with the same "not visitor data" status as the depth model weights
+above, not a request this app routes your camera data through.
 
 ## Recorded example
 

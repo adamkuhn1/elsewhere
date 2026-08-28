@@ -6,6 +6,13 @@ import { Renderer } from "./renderer";
 import { hasRecordedExample, loadRecordedExample, RecordedExampleError } from "./recordedExample";
 import { downloadAsRecordedExample, isExportDebugEnabled } from "./exportCapture";
 import { identityPose, releaseKeyframeImage, type Keyframe, type CaptureFailure } from "./types";
+import {
+  MediaPipeHeadTracker,
+  isHeadTrackingAvailable,
+  smoothHeadOffset,
+  type HeadPose,
+  type HeadTracker,
+} from "./tracking";
 
 type Stage =
   | { kind: "idle" }
@@ -234,6 +241,9 @@ export default function App() {
         A locally processed spatial photograph: capture one camera frame, estimate its depth on this device, and turn it into a
         textured 3D surface you can look around. Nothing you capture leaves your browser.
       </p>
+      <p className="app-copy">
+        It works best on rooms and scenes with objects at different distances, where the depth has something to work with.
+      </p>
 
       {stage.kind === "idle" && (
         <div className="panel">
@@ -343,10 +353,68 @@ function MeshView({ keyframe, compare }: { keyframe: Keyframe; compare: boolean 
   }, [compare]);
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (tracking) return; // head tracking owns the viewpoint while it's on
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     const y = ((e.clientY - rect.top) / rect.height) * 2 - 1;
     rendererRef.current?.setPointer(x, y);
+  };
+
+  // --- optional head tracking -----------------------------------------------
+  // Off by default; pointer parallax is unaffected unless a visitor
+  // explicitly turns this on. Everything here is local: one dynamically
+  // imported model (see tracking.ts), one camera stream, nothing captured or
+  // sent anywhere.
+  const [tracking, setTracking] = useState(false);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const trackerRef = useRef<HeadTracker>();
+  const trackingStreamRef = useRef<MediaStream>();
+  const neutralRef = useRef<HeadPose>();
+  const smoothedRef = useRef<HeadPose>({ x: 0, y: 0 });
+
+  const stopTracking = useCallback(() => {
+    trackerRef.current?.stop();
+    trackerRef.current = undefined;
+    trackingStreamRef.current?.getTracks().forEach((t) => t.stop());
+    trackingStreamRef.current = undefined;
+    neutralRef.current = undefined;
+    smoothedRef.current = { x: 0, y: 0 };
+    setTracking(false);
+  }, []);
+
+  // Camera stops on disable, on unmount (Recapture unmounts this component
+  // by switching the parent's stage away from "viewing"), or on a fresh
+  // keyframe -- the same three triggers pointer/camera cleanup follows
+  // elsewhere in this file.
+  useEffect(() => stopTracking, [stopTracking]);
+
+  const startTracking = async () => {
+    setTrackingError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 360 } },
+        audio: false,
+      });
+      trackingStreamRef.current = stream;
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.playsInline = true;
+      video.muted = true;
+      await video.play();
+
+      const tracker = new MediaPipeHeadTracker();
+      trackerRef.current = tracker;
+      tracker.onPose((pose) => {
+        if (!neutralRef.current) neutralRef.current = pose; // first reading = center
+        smoothedRef.current = smoothHeadOffset(pose, neutralRef.current, smoothedRef.current);
+        rendererRef.current?.setPointer(smoothedRef.current.x, smoothedRef.current.y);
+      });
+      await tracker.start(video);
+      setTracking(true);
+    } catch (err) {
+      setTrackingError(err instanceof Error ? err.message : String(err));
+      stopTracking();
+    }
   };
 
   return (
@@ -354,6 +422,15 @@ function MeshView({ keyframe, compare }: { keyframe: Keyframe; compare: boolean 
       <canvas ref={canvasRef} className={compare ? "hidden" : undefined} />
       {compare && (
         <OriginalImage image={keyframe.image} />
+      )}
+      {!compare && isHeadTrackingAvailable() && (
+        <div className="tracking-control">
+          <button type="button" onClick={tracking ? stopTracking : startTracking}>
+            {tracking ? "Stop head tracking" : "Use head tracking"}
+          </button>
+          {tracking && <span className="tracking-note">Tracking locally. Nothing leaves your browser.</span>}
+          {trackingError && <span className="tracking-note tracking-error">{trackingError}</span>}
+        </div>
       )}
     </div>
   );

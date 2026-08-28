@@ -135,3 +135,33 @@ button.secondary {
   height: 100%;
   object-fit: contain;
 }
+
+.tracking-control {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  max-width: calc(100% - 1.2rem);
+}
+
+.tracking-control button {
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(4px);
+  font-size: 0.85rem;
+  padding: 0.45rem 0.8rem;
+}
+
+.tracking-note {
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  background: rgb(0 0 0 / 0.55);
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+}
+
+.tracking-note.tracking-error {
+  color: #e08a8a;
+}
