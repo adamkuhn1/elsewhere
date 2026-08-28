@@ -9,6 +9,17 @@
 // offset -- it just produces the offset. `@mediapipe/tasks-vision` and its
 // model are only ever fetched once the visitor explicitly clicks "Use head
 // tracking" (see the dynamic import in `start()`), never on page load.
+//
+// Movement is normalized against the visitor's own face size at calibration,
+// not the whole camera frame -- a person sitting close fills much more of
+// the frame per centimeter of real head motion than someone sitting far
+// back, and normalizing against frame size (the original approach) made the
+// same physical lean feel wildly different, and generally far too subtle,
+// depending on distance from the webcam. Normalizing against the neutral
+// face's own bounding box, then applying a deliberate gain, is what gets
+// this closer to a "virtual window" feel: lean and the scene visibly leans
+// with you, rather than requiring you to shove your face toward the edge of
+// the frame.
 // ---------------------------------------------------------------------------
 
 /** Normalized head offset, same [-1, 1] range and axis convention as
@@ -18,10 +29,24 @@ export interface HeadPose {
   y: number;
 }
 
+/** One frame's raw face reading: landmark centroid plus bounding-box size,
+ *  all in the model's normalized [0, 1] image space. The size is what makes
+ *  face-relative (rather than frame-relative) normalization possible. */
+export interface FaceMetrics {
+  centerX: number;
+  centerY: number;
+  width: number;
+  height: number;
+}
+
 export interface HeadTracker {
   start(video: HTMLVideoElement): Promise<void>;
   stop(): void;
-  onPose(callback: (pose: HeadPose) => void): void;
+  /** Fires once per detected frame with the raw face reading. The caller
+   *  (App.tsx) owns calibration -- the first reading it gets becomes
+   *  neutral -- and turns subsequent readings into a pose via
+   *  `faceRelativePose`. */
+  onPose(callback: (metrics: FaceMetrics) => void): void;
 }
 
 /** `getUserMedia` is the only real prerequisite -- the tracker itself is a
@@ -33,10 +58,55 @@ export function isHeadTrackingAvailable(): boolean {
   return typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
 }
 
-/** One raw landmark-centroid reading, converted to the same [-1, 1] space as
- *  a pointer position, before any neutral-offset or smoothing is applied.
+/** Centroid (landmark average) and bounding box of one set of face
+ *  landmarks, in the same normalized [0, 1] image space MediaPipe reports.
  *  Exported for testing; not part of the public tracking surface. */
-export function centroidToPose(cx: number, cy: number): HeadPose {
+export function computeFaceMetrics(points: { x: number; y: number }[]): FaceMetrics {
+  let sx = 0;
+  let sy = 0;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const p of points) {
+    sx += p.x;
+    sy += p.y;
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const n = points.length;
+  return { centerX: sx / n, centerY: sy / n, width: maxX - minX, height: maxY - minY };
+}
+
+/** Sensitivity gain applied after face-relative normalization -- this is
+ *  what turns "a real head lean" into "a large, deliberate viewpoint change"
+ *  instead of the subtle drift face-relative normalization alone would
+ *  still give at a comfortable lean distance. Tuned empirically, not
+ *  derived from anything physical; there's no configuration surface for
+ *  these on purpose -- one well-tuned default beats a settings panel. */
+export const HEAD_GAIN_X = 3;
+export const HEAD_GAIN_Y = 2.5;
+
+function clamp(v: number): number {
+  return Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : 0;
+}
+
+/**
+ * Turns one raw face reading into a pose, relative to how the face looked
+ * at calibration, before any temporal smoothing. `dx`/`dy` are the
+ * centroid's displacement from neutral divided by the *neutral* face's own
+ * width/height -- proportional to the visitor's own apparent head size
+ * rather than the full camera frame, so the same physical lean reads about
+ * the same regardless of how far back they're sitting. Gain then
+ * exaggerates that into the "peer around the scene" feel this is going
+ * for; clamping keeps it inside the same [-1, 1] range `setPointer`
+ * expects. Pure and exported for testing.
+ */
+export function faceRelativePose(current: FaceMetrics, neutral: FaceMetrics): HeadPose {
+  const dx = (current.centerX - neutral.centerX) / neutral.width;
+  const dy = (current.centerY - neutral.centerY) / neutral.height;
   // Front-camera video is not mirrored at the pixel level (unlike its CSS
   // preview, if one were shown), so a head movement to the visitor's own
   // right moves the detected face toward smaller x in the raw frame -- the
@@ -45,28 +115,20 @@ export function centroidToPose(cx: number, cy: number): HeadPose {
   // view. (Flip this sign if it turns out backwards on real hardware --
   // camera mirroring conventions are exactly the kind of thing that's only
   // truly confirmed by testing on the actual device.)
-  return { x: -(cx - 0.5) * 2, y: (cy - 0.5) * 2 };
+  return { x: clamp(-dx * HEAD_GAIN_X), y: clamp(dy * HEAD_GAIN_Y) };
 }
 
 /**
- * Applies calibration (first reading becomes "centered") and a simple
- * exponential moving average to a raw pose, returning the value to feed
- * into `setPointer`. Pure function, easy to reason about and test without a
- * camera or a model: `neutral` is `null` until the first real reading
- * calibrates it, and `previous` is the last smoothed value (start at
- * `{x:0,y:0}`).
+ * Exponential moving average toward a target pose. Raw per-frame face
+ * metrics (and the gain applied on top in `faceRelativePose`) can jitter
+ * frame to frame, so this is still needed -- but tuned lighter than
+ * generic UI smoothing so the view keeps up with real head motion instead
+ * of visibly lagging behind it. Pure and exported for testing.
  */
-export function smoothHeadOffset(
-  raw: HeadPose,
-  neutral: HeadPose,
-  previous: HeadPose,
-  alpha = 0.25,
-): HeadPose {
-  const dx = raw.x - neutral.x;
-  const dy = raw.y - neutral.y;
+export function smoothHeadOffset(target: HeadPose, previous: HeadPose, alpha = 0.45): HeadPose {
   return {
-    x: previous.x + alpha * (dx - previous.x),
-    y: previous.y + alpha * (dy - previous.y),
+    x: previous.x + alpha * (target.x - previous.x),
+    y: previous.y + alpha * (target.y - previous.y),
   };
 }
 
@@ -79,7 +141,7 @@ export function smoothHeadOffset(
 export class MediaPipeHeadTracker implements HeadTracker {
   private landmarker: import("@mediapipe/tasks-vision").FaceLandmarker | undefined;
   private raf: number | undefined;
-  private callback: ((pose: HeadPose) => void) | undefined;
+  private callback: ((metrics: FaceMetrics) => void) | undefined;
 
   async start(video: HTMLVideoElement): Promise<void> {
     const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
@@ -101,16 +163,7 @@ export class MediaPipeHeadTracker implements HeadTracker {
       const result = this.landmarker.detectForVideo(video, performance.now());
       const face = result.faceLandmarks[0];
       if (face && face.length > 0) {
-        // Centroid of every landmark, not one single point: averaging ~478
-        // points is already a form of smoothing against per-frame jitter,
-        // on top of the exponential average applied by the caller.
-        let sx = 0;
-        let sy = 0;
-        for (const p of face) {
-          sx += p.x;
-          sy += p.y;
-        }
-        this.callback?.(centroidToPose(sx / face.length, sy / face.length));
+        this.callback?.(computeFaceMetrics(face));
       }
       this.raf = requestAnimationFrame(tick);
     };
@@ -125,7 +178,7 @@ export class MediaPipeHeadTracker implements HeadTracker {
     this.callback = undefined;
   }
 
-  onPose(callback: (pose: HeadPose) => void): void {
+  onPose(callback: (metrics: FaceMetrics) => void): void {
     this.callback = callback;
   }
 }

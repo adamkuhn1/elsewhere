@@ -39,6 +39,12 @@ export const MAX_PARALLAX_OFFSET = 0.35;
 /** Per-frame interpolation factor toward the pointer's target offset --
  *  smooths out instant jumps without adding perceptible lag. */
 const PARALLAX_SMOOTHING = 0.08;
+/** Head tracking is going for a "virtual window" feel, not subtle mouse
+ *  parallax -- it gets a bigger orbit radius and faster convergence than
+ *  the pointer, set via `setInputMode`. Pointer behavior above is
+ *  unchanged; this is strictly additive. */
+export const HEAD_PARALLAX_OFFSET = 0.7;
+const HEAD_PARALLAX_SMOOTHING = 0.22;
 
 /** Pulled out of the class so camera bounds are testable without a WebGL
  *  context: clamps a normalized pointer position to [-1, 1] on each axis,
@@ -114,6 +120,8 @@ export class Renderer {
   private indexCount = 0;
   private pointerTarget: [number, number] = [0, 0];
   private pointerCurrent: [number, number] = [0, 0];
+  private parallaxOffset = MAX_PARALLAX_OFFSET;
+  private parallaxSmoothing = PARALLAX_SMOOTHING;
   private rafHandle: number | undefined;
   private paused = false;
   private disposed = false;
@@ -182,6 +190,17 @@ export class Renderer {
     this.pointerTarget = clampParallax(x, y);
   }
 
+  /** Switches the camera-orbit radius and convergence speed between the
+   *  subtle, well-established pointer feel and a deliberately stronger,
+   *  faster-converging one for head tracking. Both `setPointer` calls (from
+   *  a mouse drag or from tracking.ts) go through the same interpolation in
+   *  `drawFrame` either way -- this only changes the two constants that
+   *  interpolation uses, not the input path itself. */
+  setInputMode(mode: "pointer" | "head"): void {
+    this.parallaxOffset = mode === "head" ? HEAD_PARALLAX_OFFSET : MAX_PARALLAX_OFFSET;
+    this.parallaxSmoothing = mode === "head" ? HEAD_PARALLAX_SMOOTHING : PARALLAX_SMOOTHING;
+  }
+
   setPaused(paused: boolean): void {
     this.paused = paused;
     if (paused) {
@@ -203,12 +222,12 @@ export class Renderer {
 
   private drawFrame(): void {
     const gl = this.gl;
-    this.pointerCurrent[0] += (this.pointerTarget[0] - this.pointerCurrent[0]) * PARALLAX_SMOOTHING;
-    this.pointerCurrent[1] += (this.pointerTarget[1] - this.pointerCurrent[1]) * PARALLAX_SMOOTHING;
+    this.pointerCurrent[0] += (this.pointerTarget[0] - this.pointerCurrent[0]) * this.parallaxSmoothing;
+    this.pointerCurrent[1] += (this.pointerTarget[1] - this.pointerCurrent[1]) * this.parallaxSmoothing;
 
     const eye: [number, number, number] = [
-      this.pointerCurrent[0] * MAX_PARALLAX_OFFSET,
-      -this.pointerCurrent[1] * MAX_PARALLAX_OFFSET,
+      this.pointerCurrent[0] * this.parallaxOffset,
+      -this.pointerCurrent[1] * this.parallaxOffset,
       1.6,
     ];
     const view = lookAt(eye, [0, 0, 0]);

@@ -9,7 +9,9 @@ import { identityPose, releaseKeyframeImage, type Keyframe, type CaptureFailure 
 import {
   MediaPipeHeadTracker,
   isHeadTrackingAvailable,
+  faceRelativePose,
   smoothHeadOffset,
+  type FaceMetrics,
   type HeadPose,
   type HeadTracker,
 } from "./tracking";
@@ -367,9 +369,10 @@ function MeshView({ keyframe, compare }: { keyframe: Keyframe; compare: boolean 
   // sent anywhere.
   const [tracking, setTracking] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [justCentered, setJustCentered] = useState(false);
   const trackerRef = useRef<HeadTracker>();
   const trackingStreamRef = useRef<MediaStream>();
-  const neutralRef = useRef<HeadPose>();
+  const neutralRef = useRef<FaceMetrics>();
   const smoothedRef = useRef<HeadPose>({ x: 0, y: 0 });
 
   const stopTracking = useCallback(() => {
@@ -379,6 +382,7 @@ function MeshView({ keyframe, compare }: { keyframe: Keyframe; compare: boolean 
     trackingStreamRef.current = undefined;
     neutralRef.current = undefined;
     smoothedRef.current = { x: 0, y: 0 };
+    rendererRef.current?.setInputMode("pointer");
     setTracking(false);
   }, []);
 
@@ -404,12 +408,18 @@ function MeshView({ keyframe, compare }: { keyframe: Keyframe; compare: boolean 
 
       const tracker = new MediaPipeHeadTracker();
       trackerRef.current = tracker;
-      tracker.onPose((pose) => {
-        if (!neutralRef.current) neutralRef.current = pose; // first reading = center
-        smoothedRef.current = smoothHeadOffset(pose, neutralRef.current, smoothedRef.current);
+      tracker.onPose((metrics) => {
+        if (!neutralRef.current) {
+          neutralRef.current = metrics; // first reading = center
+          setJustCentered(true);
+          window.setTimeout(() => setJustCentered(false), 2000);
+        }
+        const target = faceRelativePose(metrics, neutralRef.current);
+        smoothedRef.current = smoothHeadOffset(target, smoothedRef.current);
         rendererRef.current?.setPointer(smoothedRef.current.x, smoothedRef.current.y);
       });
       await tracker.start(video);
+      rendererRef.current?.setInputMode("head");
       setTracking(true);
     } catch (err) {
       setTrackingError(err instanceof Error ? err.message : String(err));
@@ -428,7 +438,11 @@ function MeshView({ keyframe, compare }: { keyframe: Keyframe; compare: boolean 
           <button type="button" onClick={tracking ? stopTracking : startTracking}>
             {tracking ? "Stop head tracking" : "Use head tracking"}
           </button>
-          {tracking && <span className="tracking-note">Tracking locally. Nothing leaves your browser.</span>}
+          {tracking && (
+            <span className="tracking-note">
+              {justCentered ? "Centered. Lean to look around." : "Tracking locally. Nothing leaves your browser."}
+            </span>
+          )}
           {trackingError && <span className="tracking-note tracking-error">{trackingError}</span>}
         </div>
       )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampParallax, MAX_PARALLAX_OFFSET } from "./renderer";
+import { clampParallax, HEAD_PARALLAX_OFFSET, MAX_PARALLAX_OFFSET } from "./renderer";
 
 describe("clampParallax (camera bounds)", () => {
   it("passes through values already inside [-1, 1]", () => {
@@ -31,5 +31,14 @@ describe("clampParallax (camera bounds)", () => {
     // subject (1.6, in drawFrame) or the camera could swing past the mesh.
     expect(MAX_PARALLAX_OFFSET).toBeLessThan(1.6);
     expect(MAX_PARALLAX_OFFSET).toBeGreaterThan(0);
+  });
+
+  it("gives head tracking a visibly stronger orbit than the pointer, but still short of the eye's own distance", () => {
+    // Head tracking is going for a "peer around the scene" feel and should
+    // read as clearly stronger than pointer parallax, but 1.6 (the eye's
+    // fixed distance from the subject in drawFrame) is still the hard
+    // ceiling -- past that the camera could swing past the mesh entirely.
+    expect(HEAD_PARALLAX_OFFSET).toBeGreaterThan(MAX_PARALLAX_OFFSET);
+    expect(HEAD_PARALLAX_OFFSET).toBeLessThan(1.6);
   });
 });
