@@ -42,9 +42,11 @@ const PARALLAX_SMOOTHING = 0.08;
 /** Head tracking is going for a "virtual window" feel, not subtle mouse
  *  parallax -- it gets a bigger orbit radius and faster convergence than
  *  the pointer, set via `setInputMode`. Pointer behavior above is
- *  unchanged; this is strictly additive. */
-export const HEAD_PARALLAX_OFFSET = 0.7;
-const HEAD_PARALLAX_SMOOTHING = 0.22;
+ *  unchanged; this is strictly additive. Pulled back from an earlier,
+ *  too-aggressive pass (0.7 / 0.22) once a normal deliberate lean was
+ *  already swinging the camera close to its limit. */
+export const HEAD_PARALLAX_OFFSET = 0.5;
+const HEAD_PARALLAX_SMOOTHING = 0.18;
 
 /** Pulled out of the class so camera bounds are testable without a WebGL
  *  context: clamps a normalized pointer position to [-1, 1] on each axis,

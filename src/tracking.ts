@@ -81,13 +81,17 @@ export function computeFaceMetrics(points: { x: number; y: number }[]): FaceMetr
 }
 
 /** Sensitivity gain applied after face-relative normalization -- this is
- *  what turns "a real head lean" into "a large, deliberate viewpoint change"
+ *  what turns "a real head lean" into "a deliberate viewpoint change"
  *  instead of the subtle drift face-relative normalization alone would
- *  still give at a comfortable lean distance. Tuned empirically, not
- *  derived from anything physical; there's no configuration surface for
- *  these on purpose -- one well-tuned default beats a settings panel. */
-export const HEAD_GAIN_X = 3;
-export const HEAD_GAIN_Y = 2.5;
+ *  still give at a comfortable lean distance. Tuned down from an earlier,
+ *  too-aggressive pass where a small, unconscious head movement already
+ *  produced a distracting amount of motion; this keeps small movement
+ *  quiet and saves the strong effect for an actual deliberate lean. Tuned
+ *  empirically, not derived from anything physical; there's no
+ *  configuration surface for these on purpose -- one well-tuned default
+ *  beats a settings panel. */
+export const HEAD_GAIN_X = 2.1;
+export const HEAD_GAIN_Y = 1.75;
 
 function clamp(v: number): number {
   return Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : 0;
@@ -125,7 +129,7 @@ export function faceRelativePose(current: FaceMetrics, neutral: FaceMetrics): He
  * generic UI smoothing so the view keeps up with real head motion instead
  * of visibly lagging behind it. Pure and exported for testing.
  */
-export function smoothHeadOffset(target: HeadPose, previous: HeadPose, alpha = 0.45): HeadPose {
+export function smoothHeadOffset(target: HeadPose, previous: HeadPose, alpha = 0.38): HeadPose {
   return {
     x: previous.x + alpha * (target.x - previous.x),
     y: previous.y + alpha * (target.y - previous.y),
