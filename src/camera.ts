@@ -25,9 +25,8 @@ export class Camera {
    *  mounting, so capture must not depend on that element existing. */
   private offscreenVideo: HTMLVideoElement | undefined;
 
-  /** Must be called from a user gesture (a click handler). Never on mount,
-   *  never automatically -- the mission's whole camera-consent model
-   *  depends on this being an explicit, visible ask. */
+  /** Must be called from a user gesture (a click handler), never
+   *  automatically on mount -- camera access is always an explicit ask. */
   async start(): Promise<void> {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new CameraError("camera-unavailable", "This browser has no camera API.");

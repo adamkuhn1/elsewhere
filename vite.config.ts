@@ -16,10 +16,7 @@ const require = createRequire(import.meta.url);
  * publish time -- inspected directly in the installed package
  * (node_modules/onnxruntime-web/dist/ort.webgpu.mjs): three of the four
  * branches are literal `false` in this exact release, leaving `asyncify` as
- * the only reachable one. Copying all four (as a version with JSPI reachable
- * would need to) would be the "dozens of WASM variants" the build brief
- * warns against; this copies the one this exact installed version can ever
- * select.
+ * the only reachable one. This copies just that one, not all four.
  */
 const ORT_ASSETS = ["ort-wasm-simd-threaded.asyncify.wasm", "ort-wasm-simd-threaded.asyncify.mjs"];
 

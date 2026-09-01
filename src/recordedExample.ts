@@ -39,18 +39,6 @@ function parseManifest(text: string): Manifest | undefined {
 }
 
 /**
- * Loads the one bundled recorded example: a real captured frame and its
- * real inferred depth (see `public/example/README.md` for provenance),
- * pre-computed so this path never touches the camera or the depth runtime.
- *
- * `public/example/manifest.json` is intentionally not checked into this
- * repo yet -- it needs an actual photographed room, which this build
- * process cannot produce on its own. Until Adam captures one frame through
- * the live pipeline above and it's exported here, this throws the same
- * honest, typed failure a visitor would see, rather than a raw fetch error
- * or a fabricated placeholder image.
- */
-/**
  * Whether a recorded example is actually bundled in this build. Fetches and
  * validates the manifest's actual shape (see parseManifest) rather than
  * trusting a 200 status alone -- the idle screen uses this to decide

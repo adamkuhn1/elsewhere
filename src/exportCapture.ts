@@ -1,14 +1,9 @@
 import type { Keyframe } from "./types";
 
-// ---------------------------------------------------------------------------
-// This build never touches a real camera itself: an automated build
-// process has no business photographing anyone's room, so
-// the one real recorded example has to come from Adam actually using the
-// live pipeline above, once, on his own machine. This turns whatever he
-// just captured into the exact three files `recordedExample.ts` expects
-// under public/example/ -- gated behind ?debug=1 so it never appears in the
-// normal visitor UI.
-// ---------------------------------------------------------------------------
+// Exports a real live capture into the exact three files recordedExample.ts
+// expects under public/example/, so the bundled example is always a real
+// captured frame rather than a synthetic one. Gated behind ?debug=1 so it
+// never appears in the normal visitor UI.
 
 function download(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);

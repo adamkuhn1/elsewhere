@@ -1,25 +1,17 @@
 // ---------------------------------------------------------------------------
 // Head tracking: optional, local, off by default.
 //
-// Pointer parallax (renderer.ts's setPointer) is the real, always-on control.
-// This module adds one alternative input into that exact same call: a face
-// landmark tracker (MediaPipe's FaceLandmarker, not hand-written detection)
-// that turns head movement into the same normalized [-1, 1] offset a pointer
-// drag would produce. Nothing here decides *how* the mesh responds to that
-// offset -- it just produces the offset. `@mediapipe/tasks-vision` and its
-// model are only ever fetched once the visitor explicitly clicks "Use head
-// tracking" (see the dynamic import in `start()`), never on page load.
+// Adds one alternative input into renderer.ts's setPointer -- a face
+// landmark tracker (MediaPipe's FaceLandmarker) that turns head movement
+// into the same normalized [-1, 1] offset a pointer drag would produce.
+// `@mediapipe/tasks-vision` and its model are only fetched once the visitor
+// clicks "Use head tracking" (see the dynamic import in `start()`).
 //
 // Movement is normalized against the visitor's own face size at calibration,
-// not the whole camera frame -- a person sitting close fills much more of
-// the frame per centimeter of real head motion than someone sitting far
-// back, and normalizing against frame size (the original approach) made the
-// same physical lean feel wildly different, and generally far too subtle,
-// depending on distance from the webcam. Normalizing against the neutral
-// face's own bounding box, then applying a deliberate gain, is what gets
-// this closer to a "virtual window" feel: lean and the scene visibly leans
-// with you, rather than requiring you to shove your face toward the edge of
-// the frame.
+// not the whole camera frame: a person sitting close fills much more of the
+// frame per centimeter of real head motion than someone sitting farther
+// back, so normalizing against frame size instead makes the same physical
+// lean feel wildly different depending on distance from the webcam.
 // ---------------------------------------------------------------------------
 
 /** Normalized head offset, same [-1, 1] range and axis convention as
@@ -80,16 +72,9 @@ export function computeFaceMetrics(points: { x: number; y: number }[]): FaceMetr
   return { centerX: sx / n, centerY: sy / n, width: maxX - minX, height: maxY - minY };
 }
 
-/** Sensitivity gain applied after face-relative normalization -- this is
- *  what turns "a real head lean" into "a deliberate viewpoint change"
- *  instead of the subtle drift face-relative normalization alone would
- *  still give at a comfortable lean distance. Tuned down from an earlier,
- *  too-aggressive pass where a small, unconscious head movement already
- *  produced a distracting amount of motion; this keeps small movement
- *  quiet and saves the strong effect for an actual deliberate lean. Tuned
- *  empirically, not derived from anything physical; there's no
- *  configuration surface for these on purpose -- one well-tuned default
- *  beats a settings panel. */
+/** Sensitivity gain applied after face-relative normalization, turning a
+ *  real head lean into a deliberate viewpoint change. Tuned empirically so
+ *  small unconscious movement stays quiet while a real lean reads clearly. */
 export const HEAD_GAIN_X = 2.1;
 export const HEAD_GAIN_Y = 1.75;
 
@@ -112,13 +97,10 @@ export function faceRelativePose(current: FaceMetrics, neutral: FaceMetrics): He
   const dx = (current.centerX - neutral.centerX) / neutral.width;
   const dy = (current.centerY - neutral.centerY) / neutral.height;
   // Front-camera video is not mirrored at the pixel level (unlike its CSS
-  // preview, if one were shown), so a head movement to the visitor's own
-  // right moves the detected face toward smaller x in the raw frame -- the
-  // opposite of how dragging the pointer right increases x. Negating x is
-  // what keeps "lean right" and "drag right" doing the same thing to the
-  // view. (Flip this sign if it turns out backwards on real hardware --
-  // camera mirroring conventions are exactly the kind of thing that's only
-  // truly confirmed by testing on the actual device.)
+  // preview, if one were shown), so leaning right moves the detected face
+  // toward smaller x in the raw frame -- the opposite of dragging the
+  // pointer right. Negating x keeps "lean right" and "drag right" doing
+  // the same thing to the view.
   return { x: clamp(-dx * HEAD_GAIN_X), y: clamp(dy * HEAD_GAIN_Y) };
 }
 

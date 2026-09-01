@@ -4,9 +4,7 @@ import type { FailureReason } from "./types";
 // Main-thread handle onto the depth-inference worker.
 //
 // One worker, created lazily on first use and reused for subsequent
-// captures -- recapture must not pay the model-load cost twice. No worker
-// protocol beyond the three messages worker.ts already speaks; this is
-// deliberately not a generic RPC layer.
+// captures -- recapture must not pay the model-load cost twice.
 // ---------------------------------------------------------------------------
 
 export class DepthEstimationError extends Error {
