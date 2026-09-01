@@ -53,10 +53,7 @@ function selfHostOrtAssets(): Plugin {
     // onnxruntime-web's own WASM loader does exactly that, dynamically
     // importing its `.mjs` glue module rather than only fetching the
     // `.wasm`. A middleware answers the request before Vite's public-dir
-    // handling (and its import restriction) ever sees it -- the same
-    // approach this project's own archived Elsewhere implementation used
-    // for this exact problem (see git history on
-    // archive/elsewhere-pre-reset-20260811).
+    // handling (and its import restriction) ever sees it.
     configureServer(server) {
       const src = resolveOrtDist();
       if (!src) return;
@@ -87,19 +84,17 @@ function selfHostOrtAssets(): Plugin {
 }
 
 // base: "./" keeps built asset paths relative so this app works both
-// standalone and embedded in the portfolio shell via iframe (see the same
-// comment in apps/showboat and apps/27b's vite.config.ts).
+// standalone and embedded via iframe.
 export default defineConfig({
   plugins: [react(), selfHostOrtAssets()],
   base: "./",
   resolve: {
     // @huggingface/transformers depends on a specific onnxruntime-web
     // version internally; this app also depends on it directly (pinned to
-    // the stable release, not that nested pin -- see package.json and
-    // Agent B's feasibility spike). Without dedupe, Vite bundles both and
-    // WebGPU session creation silently picks whichever copy initialized
-    // its environment first, which is exactly the kind of bug that only
-    // shows up in production.
+    // the stable release, not that nested pin). Without dedupe, Vite bundles
+    // both and WebGPU session creation silently picks whichever copy
+    // initialized its environment first, which is exactly the kind of bug
+    // that only shows up in production.
     dedupe: ["onnxruntime-web", "onnxruntime-common"],
   },
   worker: {

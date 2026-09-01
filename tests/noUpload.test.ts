@@ -4,8 +4,7 @@ import { describe, expect, it } from "vitest";
 
 // ---------------------------------------------------------------------------
 // A static guard, not a network trace: this can't prove nothing is ever
-// uploaded (Agent B's live network trace against the real pipeline did
-// that), but it does prove the source doesn't contain the *shape* of an
+// uploaded, but it does prove the source doesn't contain the *shape* of an
 // upload -- a POST/PUT, a fetch body, a form submission -- anywhere near
 // the modules that ever touch a captured frame. A future edit that adds one
 // fails this immediately instead of only being caught by manual QA.
