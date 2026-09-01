@@ -33,9 +33,10 @@ camera frame → Depth Anything V2 (Worker, WebGPU) → per-pixel depth
    control is unaffected unless you turn it on.
 
 Nothing captured is ever sent anywhere — the only network requests the live
-pipeline makes are one-time fetches of the model weights and the ONNX
-runtime, both self-hosted at this app's own origin (verified with a live
-network trace, not just by reading the code).
+pipeline makes are one-time fetches of the depth model weights and the ONNX
+runtime, both self-hosted at this app's own origin. Optional head tracking
+additionally fetches MediaPipe's model from Google's CDN, only once you
+explicitly enable it.
 
 ## Technical highlights
 
